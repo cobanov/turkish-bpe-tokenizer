@@ -1,0 +1,6 @@
+pandas
+pyarrow
+langid
+tokenizers
+dask[complete]
+psutil
