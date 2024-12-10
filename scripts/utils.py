@@ -11,6 +11,12 @@ def setup_logging(log_file="tokenizer_training.log"):
         format="%(asctime)s %(levelname)s:%(message)s",
         level=logging.INFO,
     )
+    # Also log to console
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s:%(message)s")
+    console.setFormatter(formatter)
+    logging.getLogger("").addHandler(console)
 
 
 def log_memory_usage():
