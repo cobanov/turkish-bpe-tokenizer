@@ -4,7 +4,7 @@ import hashlib
 import langid
 import logging
 
-# Define the allowed characters based on the Turkish alphabet
+# Define the allowed characters based on the Turkish alphabet and digits
 ALLOWED_CHARACTERS_REGEX = re.compile(r"[^A-Za-zÇçĞğIıİiÖöŞşÜü0-9\s.,!?;:()\"\'`-]+")
 
 
@@ -15,7 +15,7 @@ def is_turkish(text):
 
 
 def clean_text(text):
-    """Clean the text by applying language filtering, removing unwanted characters, normalization, and whitespace management."""
+    """Clean a single piece of text."""
     if not is_turkish(text):
         return None
 
@@ -31,13 +31,11 @@ def clean_text(text):
     return text if text else None
 
 
-def prepare_cleaned_data(raw_data_iterator):
-    """Generator that yields cleaned text without duplicates using hashes."""
-    seen_hashes = set()
-    for text in raw_data_iterator:
+def clean_texts(texts):
+    """Clean a batch of texts."""
+    cleaned_texts = []
+    for text in texts:
         cleaned = clean_text(text)
         if cleaned:
-            text_hash = hashlib.md5(cleaned.encode("utf-8")).hexdigest()
-            if text_hash not in seen_hashes:
-                seen_hashes.add(text_hash)
-                yield cleaned
+            cleaned_texts.append(cleaned)
+    return cleaned_texts

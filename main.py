@@ -1,13 +1,18 @@
 import os
 from scripts import utils
 from scripts.data_loading import load_all_data
-from scripts.data_cleaning import prepare_cleaned_data
+from scripts.data_cleaning import clean_texts
 from scripts.tokenizer_training import train_tokenizer
 from scripts.evaluation import (
     load_tokenizer,
+    check_unwanted_characters,
+    check_numerical_characters,
     tokenize_samples,
     coverage_testing,
 )
+import concurrent.futures
+import hashlib
+import sys
 
 # Configuration Parameters
 PARQUET_DIR = "data/turkish/"  # Directory containing Parquet files
@@ -33,16 +38,58 @@ VALIDATION_SENTENCES = [
 ]
 
 
+def batch_generator(iterator, batch_size=1000):
+    """Generator that yields lists of texts in batches."""
+    batch = []
+    for item in iterator:
+        batch.append(item)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
 def main():
     # Setup logging
     utils.setup_logging()
     utils.log_memory_usage()
 
-    # Load and clean data
-    print("Loading and cleaning data...")
-    utils.log_memory_usage()
+    # Load all raw data
+    print("Loading data...")
     raw_data = load_all_data(PARQUET_DIR, TEXT_FILES_DIR)
-    cleaned_data = prepare_cleaned_data(raw_data)
+
+    # Initialize deduplication set
+    seen_hashes = set()
+
+    # Initialize ProcessPoolExecutor
+    num_workers = os.cpu_count() or 4  # Default to 4 if os.cpu_count() is None
+    print(f"Using {num_workers} worker processes for data cleaning.")
+
+    # Initialize cleaned data list
+    cleaned_data = []
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        # Submit cleaning tasks in batches
+        futures = []
+        for batch in batch_generator(raw_data, batch_size=1000):
+            futures.append(executor.submit(clean_texts, batch))
+
+        # As each future completes, process the results
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                cleaned_batch = future.result()
+                for cleaned_text in cleaned_batch:
+                    # Deduplication
+                    text_hash = hashlib.md5(cleaned_text.encode("utf-8")).hexdigest()
+                    if text_hash not in seen_hashes:
+                        seen_hashes.add(text_hash)
+                        cleaned_data.append(cleaned_text)
+            except Exception as e:
+                utils.logger.error(f"Error during data cleaning: {e}")
+
+    print(f"Total cleaned and deduplicated texts: {len(cleaned_data)}")
+    utils.log_memory_usage()
 
     # Train the tokenizer
     print("Training the tokenizer...")
@@ -67,10 +114,11 @@ def main():
     tokenizer = load_tokenizer(TOKENIZER_SAVE_PATH)
     if tokenizer is None:
         print("Failed to load the tokenizer. Exiting evaluation.")
-        return
+        sys.exit(1)
 
     tokenize_samples(tokenizer, SAMPLE_SENTENCES)
     coverage_testing(tokenizer, VALIDATION_SENTENCES)
+    utils.log_memory_usage()
 
 
 if __name__ == "__main__":
