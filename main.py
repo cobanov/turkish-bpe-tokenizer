@@ -5,8 +5,6 @@ from scripts.data_cleaning import clean_texts
 from scripts.tokenizer_training import train_tokenizer
 from scripts.evaluation import (
     load_tokenizer,
-    check_unwanted_characters,
-    check_numerical_characters,
     tokenize_samples,
     coverage_testing,
 )
